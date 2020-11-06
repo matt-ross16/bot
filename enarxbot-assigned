@@ -10,6 +10,8 @@ import os
 if os.environ["GITHUB_EVENT_NAME"] not in ["pull_request_target", "issues"]:
     sys.exit(0)
 
+owner, repo = os.environ["GITHUB_REPOSITORY"].split("/")
+
 with open(os.environ["GITHUB_EVENT_PATH"]) as f:
     event = json.load(f)
 
@@ -26,63 +28,69 @@ else:
 
 
 # Find out what projects the issue/PR is in, as well as their assignees.
-result = bot.graphql(
-    """
-    query($id:ID!, $cardCursor:String, $assigneeCursor:String) {
-        node(id:$id) {
-            ... on PullRequest {
-                assignees(first:100, after:$assigneeCursor) {
-                    pageInfo { endCursor hasNextPage }
-                    nodes {
-                        login
+try:
+    result = bot.graphql(
+        """
+        query($id:ID!, $cardCursor:String, $assigneeCursor:String) {
+            node(id:$id) {
+                ... on PullRequest {
+                    number
+                    assignees(first:100, after:$assigneeCursor) {
+                        pageInfo { endCursor hasNextPage }
+                        nodes {
+                            login
+                        }
                     }
-                }
-                projectCards(first:100, archivedStates:NOT_ARCHIVED, after:$cardCursor) {
-                    pageInfo { endCursor hasNextPage }
-                    nodes {
-                        id
-                        column {
+                    projectCards(first:100, archivedStates:NOT_ARCHIVED, after:$cardCursor) {
+                        pageInfo { endCursor hasNextPage }
+                        nodes {
                             id
-                            name
-                            project {
+                            column {
                                 id
                                 name
+                                project {
+                                    id
+                                    name
+                                }
                             }
                         }
                     }
                 }
-            }
-            ... on Issue {
-                assignees(first:100, after:$assigneeCursor) {
-                    pageInfo { endCursor hasNextPage }
-                    nodes {
-                        login
+                ... on Issue {
+                    number
+                    assignees(first:100, after:$assigneeCursor) {
+                        pageInfo { endCursor hasNextPage }
+                        nodes {
+                            login
+                        }
                     }
-                }
-                projectCards(first:100, archivedStates:NOT_ARCHIVED, after:$cardCursor) {
-                    pageInfo { endCursor hasNextPage }
-                    nodes {
-                        id
-                        column {
+                    projectCards(first:100, archivedStates:NOT_ARCHIVED, after:$cardCursor) {
+                        pageInfo { endCursor hasNextPage }
+                        nodes {
                             id
-                            name
-                            project {
+                            column {
                                 id
                                 name
+                                project {
+                                    id
+                                    name
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-    """,
-    id=id,
-    page={
-        "cardCursor": ["node", "projectCards"],
-        "assigneeCursor": ["node", "assignees"],
-    }
-)
+        """,
+        id=id,
+        page={
+            "cardCursor": ["node", "projectCards"],
+            "assigneeCursor": ["node", "assignees"],
+        }
+    )
+except bot.TokenError as e:
+    print(e.error)
+    sys.exit(0)
 
 # Construct lists of assignees, projects, and columns.
 assignees = result["node"]["assignees"]["nodes"]
@@ -95,12 +103,16 @@ if len(assignees) > 0 and bot.PROJECTS["Sprint"] not in columns.keys():
     # Issues must additionally be present in the "Assigned" column of the
     # Planning board to be moved.
     if id_type == "issue" and columns.get(bot.PROJECTS["Planning"]) == "Assigned":
+        # Print status.
+        print(f"Moving issue {owner}/{repo}#{result['node']['number']} to Sprint board")
         input = {
             "projectColumnId": bot.COLUMNS["Sprint"]["Assigned"],
             "contentId": id
         }
 
     if id_type == "pr":
+        # Print status.
+        print(f"Moving PR {owner}/{repo}#{result['node']['number']} to Sprint board")
         input = {
             "projectColumnId": bot.COLUMNS["Sprint"]["Reviewing"],
             "contentId": id
@@ -108,13 +120,18 @@ if len(assignees) > 0 and bot.PROJECTS["Sprint"] not in columns.keys():
 
 # If this issue/PR needs to be moved, move it.
 if input is not None:
-    bot.graphql(
-        """
-        mutation($input:AddProjectCardInput!) {
-            addProjectCard(input:$input) {
-                clientMutationId
+    try:
+        bot.graphql(
+            """
+            mutation($input:AddProjectCardInput!) {
+                addProjectCard(input:$input) {
+                    clientMutationId
+                }
             }
-        }
-        """,
-        input=input
-    )
+            """,
+            input=input
+        )
+    except bot.GraphQLError as e:
+        if e["message"] != "Project already has the associated issue":
+            raise
+        print(f"Project already has this card. Skipping addition.")
