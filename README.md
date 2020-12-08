@@ -13,7 +13,7 @@ modularization efforts are underway to make it generally available.
 See the status of Enarxbot on all repositories that use it.
 
 ![bot](https://github.com/enarx/bot/workflows/enarxbot/badge.svg)
-![enarx-keepldr](https://github.com/matt-ross16/enarx-keepldr/workflows/enarxbot/badge.svg)
+![enarx-keepldr](https://github.com/matt-ross16/enarx-keepldr/workflows/enarxbot/badge.svg?branch=test)
 ![enarx-wasmldr](https://github.com/enarx/enarx-wasmldr/workflows/enarxbot/badge.svg)
 ![frenetic](https://github.com/enarx/frenetic/workflows/enarxbot/badge.svg)
 ![packet.com](https://github.com/enarx/packet.com/workflows/enarxbot/badge.svg)
